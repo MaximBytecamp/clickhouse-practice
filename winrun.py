@@ -17,6 +17,10 @@ def log(*a):
     t = " ".join(str(x) for x in a); print(t, flush=True); LOG.write(t + "\n"); LOG.flush()
 
 
+def ours(name):
+    return "Docker" in name or "WSL" in name or "Windows Subsystem" in name
+
+
 def state():
     rows = []
     for w in Desktop(backend="uia").windows():
@@ -24,7 +28,7 @@ def state():
             if not w.is_visible() or not w.window_text():
                 continue
             name = w.window_text()
-            if name in ("Taskbar", "Program Manager"):
+            if not ours(name):
                 continue
             items = []
             for c in w.descendants():
@@ -44,9 +48,10 @@ def snap(tag, rows):
     name = f"{N[0]:02d}-{tag}.png"
     ImageGrab.grab(all_screens=True).save(OUT / name)
     log("СНИМОК", name)
-    for title, items, w in rows:
+    for k, (title, items, w) in enumerate(rows):
         try:
             r = w.rectangle(); log("  окно", repr(title), (r.left, r.top, r.right, r.bottom))
+            ImageGrab.grab(bbox=(r.left, r.top, r.right, r.bottom), all_screens=True).save(OUT / f"{N[0]:02d}-{tag}-win{k}.png")
         except Exception:
             log("  окно", repr(title))
         for i in items:
@@ -68,7 +73,8 @@ def watch(tag, seconds, click=True, stop=None):
                     if f"Button:{label}" in items:
                         try:
                             time.sleep(1.5); snap(tag + "-before-" + label.replace(" ", "_"), state())
-                            w.child_window(title=label, control_type="Button").click_input()
+                            btn = next(c for c in w.descendants(control_type="Button") if c.window_text() == label)
+                            btn.click_input()
                             log("НАЖАТО", label, "в", repr(title)); time.sleep(3)
                         except Exception as e:
                             log("не нажалось", label, e)
@@ -76,21 +82,33 @@ def watch(tag, seconds, click=True, stop=None):
         time.sleep(4)
 
 
+def hide_console():
+    for w in Desktop(backend="win32").windows():
+        try:
+            if "hosted-compute-agent" in w.window_text():
+                w.minimize(); log("свернул консоль агента")
+        except Exception:
+            pass
+
+
 try:
+    hide_console()
     log(subprocess.run(["powershell", "-c", "Get-ComputerInfo -Property OsName,OsVersion,CsProcessors | Format-List; wsl --status"],
                        capture_output=True, text=True, encoding="utf-8", errors="replace").stdout)
     inst = pathlib.Path("C:/dd/DockerDesktopInstaller.exe"); inst.parent.mkdir(exist_ok=True)
     log("скачиваю установщик")
     urllib.request.urlretrieve("https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe", inst)
     log("размер", inst.stat().st_size)
+    hide_console()
     p = subprocess.Popen([str(inst)])
     watch("install", 900, stop=lambda rows: p.poll() is not None and not rows)
     log("установщик завершился с кодом", p.poll())
     exe = pathlib.Path("C:/Program Files/Docker/Docker/Docker Desktop.exe")
     log("Docker Desktop.exe есть:", exe.exists())
     if exe.exists():
+        hide_console()
         subprocess.Popen([str(exe)])
-        watch("first-run", 300)
+        watch("first-run", 420)
     snap("final", state())
 except Exception:
     log(traceback.format_exc())
