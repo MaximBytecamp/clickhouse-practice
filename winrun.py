@@ -73,7 +73,10 @@ def watch(tag, seconds, click=True, stop=None):
                     if f"Button:{label}" in items:
                         try:
                             time.sleep(1.5); snap(tag + "-before-" + label.replace(" ", "_"), state())
-                            btn = next(c for c in w.descendants(control_type="Button") if c.window_text() == label)
+                            # кнопки заголовка окна (крестик, свернуть) не трогаем: только ниже полосы заголовка
+                            top = w.rectangle().top + 60
+                            btn = next(c for c in w.descendants(control_type="Button")
+                                       if c.window_text() == label and c.rectangle().top > top)
                             btn.click_input()
                             log("НАЖАТО", label, "в", repr(title)); time.sleep(3)
                         except Exception as e:
