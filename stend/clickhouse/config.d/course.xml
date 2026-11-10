@@ -1,0 +1,5 @@
+<!-- Настройки сервера стенда. Часовой пояс задан явно: все времена в книге — UTC. -->
+<clickhouse>
+    <timezone>UTC</timezone>
+    <display_name>course</display_name>
+</clickhouse>

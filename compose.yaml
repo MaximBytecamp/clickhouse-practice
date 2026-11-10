@@ -1,0 +1,62 @@
+# Стенд справочника по ClickHouse: сервер, базы и clickhouse-client.
+#
+# Команды одинаковые в PowerShell, cmd и bash. Запускать из корня репозитория.
+#
+#   docker compose up -d                       сервер + загрузка баз (первый раз — пара минут)
+#   docker compose exec clickhouse clickhouse-client     клиент в терминале
+#   http://localhost:8123/play                 клиент в браузере, student / student
+#   docker compose run --rm reset              вернуть базы в исходное состояние
+#   docker compose down                        остановить (данные остаются)
+#
+# Если порт 8123 или 9000 уже занят: HTTP_PORT=8124 или NATIVE_PORT=9001
+# в файле .env рядом с этим файлом.
+
+name: clickhouse-practice
+
+x-seed: &seed
+  image: clickhouse/clickhouse-server:26.8.36.3
+  depends_on:
+    clickhouse:
+      condition: service_healthy
+  volumes:
+    - ./stend/seed:/seed:ro
+  entrypoint: ["sh", "/seed/load.sh"]
+  restart: "no"
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8.36.3
+    container_name: course-clickhouse
+    environment:
+      CLICKHOUSE_USER: student
+      CLICKHOUSE_PASSWORD: student
+      # student может создавать пользователей и роли (модуль 7)
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "${HTTP_PORT:-8123}:8123"
+      - "${NATIVE_PORT:-9000}:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./stend/clickhouse/config.d/course.xml:/etc/clickhouse-server/config.d/course.xml:ro
+      - ./stend/clickhouse/client.d/student.xml:/etc/clickhouse-client/config.d/student.xml:ro
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "-q", "SELECT 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  # Загружает базы, если сервер пустой, и завершается.
+  seed:
+    <<: *seed
+
+  # То же, но перезаписывает базы всегда.
+  reset:
+    <<: *seed
+    profiles: ["tools"]
+    environment:
+      FORCE: "1"
+
+volumes:
+  clickhouse-data:

@@ -1,0 +1,5 @@
+<!-- clickhouse-client внутри контейнера входит под пользователем стенда сам. -->
+<clickhouse>
+    <user>student</user>
+    <password>student</password>
+</clickhouse>
