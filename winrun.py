@@ -10,7 +10,7 @@ from pywinauto import Desktop
 OUT = pathlib.Path("shots-out").resolve(); OUT.mkdir(exist_ok=True)
 LOG = open(OUT / "log.txt", "a", encoding="utf-8")
 N = [0]
-NEXT = ["OK", "Ok", "Close", "Accept", "Close and restart", "Continue", "Skip", "Finish", "Next"]
+NEXT = ["OK", "Ok", "Accept", "Continue", "Skip", "Finish", "Next"]
 
 
 def log(*a):
@@ -94,24 +94,48 @@ def hide_console():
             pass
 
 
+def sh(cmd):
+    r = subprocess.run(["powershell", "-NoProfile", "-c", cmd], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", env={**__import__("os").environ, "WSL_UTF8": "1"})
+    log("$", cmd); log(r.stdout.strip()); log(r.stderr.strip()); log("код", r.returncode)
+
+
+def succeeded(rows):
+    return any("Text:Installation succeeded" in items for _, items, _ in rows)
+
+
 try:
     hide_console()
-    log(subprocess.run(["powershell", "-c", "Get-ComputerInfo -Property OsName,OsVersion,CsProcessors | Format-List; wsl --status"],
-                       capture_output=True, text=True, encoding="utf-8", errors="replace").stdout)
+    sh("Get-ComputerInfo -Property OsName,OsVersion | Format-List")
+    sh("wsl --status"); sh("wsl --version"); sh("wsl -l -v")
     inst = pathlib.Path("C:/dd/DockerDesktopInstaller.exe"); inst.parent.mkdir(exist_ok=True)
     log("скачиваю установщик")
     urllib.request.urlretrieve("https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe", inst)
     log("размер", inst.stat().st_size)
     hide_console()
     p = subprocess.Popen([str(inst)])
-    watch("install", 900, stop=lambda rows: p.poll() is not None and not rows)
-    log("установщик завершился с кодом", p.poll())
-    exe = pathlib.Path("C:/Program Files/Docker/Docker/Docker Desktop.exe")
-    log("Docker Desktop.exe есть:", exe.exists())
-    if exe.exists():
+    watch("install", 900, stop=succeeded)
+    time.sleep(3); snap("install-done", state())
+    for _, items, w in state():
+        if "Text:Installation succeeded" in items:
+            try:
+                top = w.rectangle().top + 60
+                next(c for c in w.descendants(control_type="Button") if c.window_text() == "Close" and c.rectangle().top > top).click_input()
+                log("закрыл установщик")
+            except Exception as e:
+                log("не закрыл", e)
+    time.sleep(5)
+    import glob, os
+    cands = glob.glob(os.path.expandvars(r"%LOCALAPPDATA%\**\Docker Desktop.exe"), recursive=True) + \
+            glob.glob(r"C:\Program Files\Docker\**\Docker Desktop.exe", recursive=True)
+    log("Docker Desktop.exe:", cands)
+    sh("docker version")
+    if cands:
         hide_console()
-        subprocess.Popen([str(exe)])
-        watch("first-run", 420)
+        subprocess.Popen([cands[0]])
+        watch("first-run", 480)
+    sh("docker version")
+    sh("wsl --status"); sh("wsl -l -v")
     snap("final", state())
 except Exception:
     log(traceback.format_exc())
