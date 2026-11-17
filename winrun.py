@@ -107,29 +107,20 @@ def succeeded(rows):
 try:
     hide_console()
     sh("Get-ComputerInfo -Property OsName,OsVersion | Format-List")
-    sh("wsl --status"); sh("wsl --version"); sh("wsl -l -v")
+    sh("wsl --status"); sh("wsl -l -v")
+    sh("systeminfo | Select-String -Pattern 'Hyper-V','Virtualization','hypervisor' -Context 0,4")
+    sh("wsl --install -d Ubuntu --no-launch")
+    sh("wsl -l -v")
+    sh("wsl -d Ubuntu -- echo WSL 2 is working")
+    sh("Stop-Service docker -Force; Get-Service docker | Format-List Name,Status")
     inst = pathlib.Path("C:/dd/DockerDesktopInstaller.exe"); inst.parent.mkdir(exist_ok=True)
     log("скачиваю установщик")
     urllib.request.urlretrieve("https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe", inst)
-    log("размер", inst.stat().st_size)
-    hide_console()
-    p = subprocess.Popen([str(inst)])
-    watch("install", 900, stop=succeeded)
-    time.sleep(3); snap("install-done", state())
-    for _, items, w in state():
-        if "Text:Installation succeeded" in items:
-            try:
-                top = w.rectangle().top + 60
-                next(c for c in w.descendants(control_type="Button") if c.window_text() == "Close" and c.rectangle().top > top).click_input()
-                log("закрыл установщик")
-            except Exception as e:
-                log("не закрыл", e)
-    time.sleep(5)
+    sh('Start-Process -Wait -FilePath C:/dd/DockerDesktopInstaller.exe -ArgumentList "install","--quiet","--accept-license"')
     import glob, os
-    cands = glob.glob(os.path.expandvars(r"%LOCALAPPDATA%\**\Docker Desktop.exe"), recursive=True) + \
-            glob.glob(r"C:\Program Files\Docker\**\Docker Desktop.exe", recursive=True)
+    cands = [p for p in (os.path.expandvars(r"%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe"),
+                         r"C:\Program Files\Docker\Docker\Docker Desktop.exe") if os.path.exists(p)]
     log("Docker Desktop.exe:", cands)
-    sh("docker version")
     if cands:
         hide_console()
         subprocess.Popen([cands[0]])
