@@ -1,0 +1,3 @@
+# Концы строк всегда LF, в том числе после git clone на Windows (core.autocrlf=true):
+# с CRLF скрипт загрузки падает («set: Illegal option -»), а в CSV попадает лишний \r.
+* text=auto eol=lf
